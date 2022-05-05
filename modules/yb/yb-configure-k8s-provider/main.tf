@@ -20,15 +20,13 @@ variable "yb_api_token" {
 }
 
 
-variable "kubeconfig_path" {
-  description = "absolute/relative kubeconfig path"
-  default     = "../../../gcp/gke/test/.kubeconfig"
-  type        = string
+variable "kubeconfig" {
+  description = "kubeconfig content"
+  type        = any
 }
-variable "yb_license_path" {
+variable "yb_k8s_secret" {
   type        = string
   description = "Absolute/Relative path of yb license file (k8s yaml)"
-  default     = "./yugabyte-k8s-secret.yml"
 }
 variable "cloud_provider_config" {
   type = object({
@@ -90,11 +88,9 @@ resource "kubernetes_cluster_role_binding" "yb_pum_crb" {
 
 locals {
 
-  yb_license_str =file(var.yb_license_path)
-  yb_license = yamldecode(local.yb_license_str)
-  kc          = yamldecode(file(var.kubeconfig_path))
-  server      = local.kc.clusters[0].cluster.server
-  server_cert = local.kc.clusters[0].cluster.certificate-authority-data
+
+  server      = var.kubeconfig.clusters[0].cluster.server
+  server_cert = var.kubeconfig.clusters[0].cluster.certificate-authority-data
 
   pum_kubeconfig = {
     apiVersion = "v1"
@@ -135,13 +131,6 @@ locals {
 
 }
 
-resource "local_file" "pum_kubeconfig" {
-  content  = yamlencode(local.pum_kubeconfig)
-  filename = "./yugabyte-platform-universe-management.conf"
-}
-
-
-
 provider "yb" {
   host = var.yb_api_endpoint
   api_token = var.yb_api_token
@@ -161,7 +150,7 @@ resource "yb_cloud_provider" "kubernetes" {
     KUBECONFIG_IMAGE_REGISTRY          = local.cpc.config.registry
     KUBECONFIG_IMAGE_PULL_SECRET_NAME  = "yugabyte-k8s-pull-secret"
     KUBECONFIG_PULL_SECRET_NAME        = "yugabyte-k8s-pull-secret.yaml"
-    KUBECONFIG_PULL_SECRET_CONTENT     = local.yb_license_str
+    KUBECONFIG_PULL_SECRET_CONTENT     = var.yb_k8s_secret
   }
 
   dynamic "regions" {

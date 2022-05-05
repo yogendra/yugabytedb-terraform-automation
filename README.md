@@ -6,6 +6,12 @@ There are cloud / infra specific modules in the `modules/` directory. These are 
 
 `envs/` folder has scripts for each environment that you want to maintain. An environment uses modules from the `modules/` folder.
 
+Copy the license files into `secrets/` directory.
+
+1. Kubernetes image pull secret - `secrets/yugabyte-k8s-secret.yml`
+
+1. Docker / Replicated License - `secrets/yugabyte.rli`
+
 ## Automation Matrix
 
 | Status | Name   | Pl. Infra | Cloud Infra       | Cloud  | Region | Zone  | Remarks |

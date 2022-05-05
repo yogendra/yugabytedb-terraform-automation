@@ -24,7 +24,7 @@ variable "yb_platform_ns" {
   description = "YugabyteDB Anywhere Namespace"
   default     = "yb-platform"
 }
-variable "yb_license_path" {
+variable "yb_k8s_secret" {
   type        = string
   description = "Absolute/Relative path of yb license file (k8s yaml)"
   default     = "./yugabyte-k8s-secret.yml"
@@ -58,7 +58,7 @@ resource "kubernetes_namespace" "yb_platform" {
 }
 
 locals {
-  yb_license = yamldecode(file(var.yb_license_path))
+  yb_license = yamldecode(var.yb_k8s_secret)
 }
 resource "kubernetes_secret" "yb_image_pull_secret" {
   depends_on = [
@@ -170,7 +170,6 @@ locals {
   yb_api_token = coalesce(yb_customer_resource.customer.api_token, random_uuid.temp_api_token.id)
 }
 resource "null_resource" "create_api_token" {
-  count = yb_customer_resource.customer.api_token == ""? 1: 0
   depends_on = [
     yb_customer_resource.customer
   ]

@@ -11,7 +11,11 @@ variable "prefix" {
   default     = "yb1"
   description = "Prefix for resources"
 }
-
+variable "create_all_subnet" {
+  type = bool
+  description = "GCP VPC - Create all subnets"
+  default = false
+}
 data "http" "my_public_ip" {
   url = "https://ifconfig.me"
 }
@@ -23,7 +27,7 @@ data "google_client_config" "provider" {
 # Create VPC Network
 resource "google_compute_network" "vpc_network" {
   name                    = "${var.prefix}-network"
-  auto_create_subnetworks = true
+  auto_create_subnetworks = var.create_all_subnet
 }
 
 # Create Router
@@ -104,6 +108,9 @@ resource "google_compute_instance" "jumpbox" {
 
 output "vpc" {
   value = google_compute_network.vpc_network.name
+}
+output "vpc_id" {
+  value = google_compute_network.vpc_network.id
 }
 
 output "sa_account_id" {

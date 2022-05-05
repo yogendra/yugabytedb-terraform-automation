@@ -12,13 +12,17 @@ variable "prefix" {
   description = "Prefix for resources"
 }
 variable "vpc" {
-  type = string
-  description = "Name of the VPC netowk"
-  default = "yb1-network"
+  type        = string
+  description = "Name of the VPC network"
+  default     = "yb1-network"
+}
+variable "vpc_id" {
+  type        = string
+  description = "Name of the VPC network"
 }
 variable "sa_account_id" {
-  type = string
-  default = "yb1-sa"
+  type        = string
+  default     = "yb1-sa"
   description = "Service Accoutn ID to be used by Workers"
 }
 variable "gke_domain" {
@@ -26,95 +30,79 @@ variable "gke_domain" {
   description = "DNS domain for GKE clusters"
   default     = "us-west1.yb"
 }
-variable "primary_master_cidr"{
-  type = string
+variable "master_cidr" {
+  type        = string
   description = "CIDR for masters"
-  default = "172.16.0.32/28"
+  default     = "172.16.0.32/28"
 }
-variable "primary_worker_cidr"{
-  type = string
+variable "worker_cidr" {
+  type        = string
   description = "CIDR for workers"
-  default = "10.2.0.0/16"
+  default     = "10.2.0.0/16"
 }
 
-variable "primary_svc_cidr"{
-  type = string
-  description = "CIDR for Service"
-  default = "10.72.0.0/20"
-}
-variable "primary_pod_cidr"{
-  type = string
-  description = "CIDR for Pods"
-  default = "10.68.0.0/14"
-}
-variable "primary_machine_type" {
-  type = string
-  description = "Type of machine for Primary GKE"
-  default = "e2-standard-8"
-}
-variable "primary_disk_type" {
-  type = string
-  description = "Type of Disk for Primary GKE"
-  default = "pd-standard"
-}
-# variable "gcptoken_file" {
-#   type        = string
-#   description = "Path to GCP Token file"
-#   default     = "./.gcptoken"
-# }
-variable "kubeconfig_file" {
+variable "service_cidr" {
   type        = string
-  description = "Path to Kubeconfig Token file"
-  default     = "./.kubeconfig"
+  description = "CIDR for Service"
+  default     = "10.72.0.0/20"
+}
+variable "pod_cidr" {
+  type        = string
+  description = "CIDR for Pods"
+  default     = "10.68.0.0/14"
+}
+variable "machine_type" {
+  type        = string
+  description = "Type of machine for GKE"
+  default     = "e2-standard-8"
+}
+variable "disk_type" {
+  type        = string
+  description = "Type of Disk for GKE"
+  default     = "pd-standard"
 }
 
 data "google_client_config" "provider" {
 }
-data "google_compute_network" "vpc" {
-  name = var.vpc
-}
-data "google_compute_zones" "primary_zone" {
+
+data "google_compute_zones" "zone" {
   # project = data.google_client_config.provider.project
   region = data.google_client_config.provider.region
 }
 
-data "google_compute_subnetwork" "primary_subnet" {
-  name   = data.google_compute_network.vpc.name
-  region = data.google_client_config.provider.region
-}
-
-data "google_service_account" "sa"{
+data "google_service_account" "sa" {
   account_id = var.sa_account_id
 }
 
 
-resource "google_compute_subnetwork" "primary_subnet" {
-  name          = "${var.prefix}-primary-subnet"
-  ip_cidr_range = var.primary_worker_cidr
-  network       = data.google_compute_network.vpc.id
+resource "google_compute_subnetwork" "subnet" {
+
+  name          = "${var.prefix}-subnet"
+  ip_cidr_range = var.worker_cidr
+  network       = var.vpc_id
   secondary_ip_range {
-    range_name    = "${var.prefix}-primary-svc-range"
-    ip_cidr_range = var.primary_svc_cidr
+    range_name    = "${var.prefix}-gke-svc-range"
+    ip_cidr_range = var.service_cidr
   }
 
   secondary_ip_range {
-    range_name    = "${var.prefix}-primary-pod-range"
-    ip_cidr_range = var.primary_pod_cidr
+    range_name    = "${var.prefix}-gke-pod-range"
+    ip_cidr_range = var.pod_cidr
   }
 }
 
 
 # Create GKE
-resource "google_container_cluster" "primary" {
-  name = "${var.prefix}-gke"
-  location = data.google_client_config.provider.region
-  node_locations = data.google_compute_zones.primary_zone.names
+resource "google_container_cluster" "gke" {
+  name                      = "${var.prefix}-gke"
+  location                  = data.google_client_config.provider.region
+  node_locations            = data.google_compute_zones.zone.names
   default_max_pods_per_node = 110
-  remove_default_node_pool = true
-  initial_node_count       = 1
+  remove_default_node_pool  = true
+  initial_node_count        = 1
 
-  network    = data.google_compute_network.vpc.name
-  subnetwork = google_compute_subnetwork.primary_subnet.id
+  network    = var.vpc_id
+  subnetwork = google_compute_subnetwork.subnet.id
 
   dns_config {
     cluster_dns        = "CLOUD_DNS"
@@ -123,8 +111,8 @@ resource "google_container_cluster" "primary" {
 
   }
   ip_allocation_policy {
-    cluster_secondary_range_name  = "${var.prefix}-primary-pod-range"
-    services_secondary_range_name = "${var.prefix}-primary-svc-range"
+    cluster_secondary_range_name  = "${var.prefix}-gke-pod-range"
+    services_secondary_range_name = "${var.prefix}-gke-svc-range"
   }
   logging_config {
     enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS"]
@@ -134,9 +122,9 @@ resource "google_container_cluster" "primary" {
   }
 
   private_cluster_config {
-    enable_private_nodes = true
+    enable_private_nodes    = true
     enable_private_endpoint = false
-    master_ipv4_cidr_block = var.primary_master_cidr
+    master_ipv4_cidr_block  = var.master_cidr
   }
   release_channel {
     channel = "RAPID"
@@ -145,15 +133,15 @@ resource "google_container_cluster" "primary" {
 
 
 # Create GKE Node Pool
-resource "google_container_node_pool" "primary_preemptible_nodes" {
+resource "google_container_node_pool" "preemptible_nodes" {
   name       = "${var.prefix}-${data.google_client_config.provider.region}"
-  cluster    = google_container_cluster.primary.id
+  cluster    = google_container_cluster.gke.id
   node_count = 2
 
   node_config {
     preemptible  = true
-    machine_type = var.primary_machine_type
-    disk_type    = var.primary_disk_type
+    machine_type = var.machine_type
+    disk_type    = var.disk_type
     disk_size_gb = "100"
     image_type   = "COS_CONTAINERD"
 
@@ -171,11 +159,6 @@ resource "google_container_node_pool" "primary_preemptible_nodes" {
   }
 }
 
-# resource "local_file" "gcptoken" {
-#   content         = data.google_client_config.provider.access_token
-#   filename        = var.gcptoken_file
-#   file_permission = "0600"
-# }
 
 
 locals {
@@ -185,29 +168,29 @@ locals {
     preferences = {
       colors = true
     }
-    current-context = "${var.prefix}-primary-context"
+    current-context = "gcp-user@${google_container_cluster.gke.name}"
     contexts = [
       {
-        name = "${var.prefix}-primary-context"
+        name = "gcp-user@${google_container_cluster.gke.name}"
         context = {
-          cluster   = google_container_cluster.primary.name
-          user      = data.google_service_account.sa.email
+          cluster   = google_container_cluster.gke.name
+          user      = "gcp-user"
           namespace = "default"
         }
       }
     ]
     clusters = [
       {
-        name = google_container_cluster.primary.name
+        name = google_container_cluster.gke.name
         cluster = {
-          server                     = "https://${google_container_cluster.primary.endpoint}"
-          certificate-authority-data = google_container_cluster.primary.master_auth[0].cluster_ca_certificate
+          server                     = "https://${google_container_cluster.gke.endpoint}"
+          certificate-authority-data = google_container_cluster.gke.master_auth[0].cluster_ca_certificate
         }
       }
     ]
     users = [
       {
-        name = data.google_service_account.sa.email
+        name = "gcp-user"
         user = {
           auth-provider = {
             name = "gcp"
@@ -224,15 +207,8 @@ locals {
   }
 }
 
-resource "local_file" "kubeconfig" {
-  content         = yamlencode(local.kubeconfig)
-  filename        = var.kubeconfig_file
-  file_permission = "0600"
-
-}
-
-output "kubeconfig_path" {
-  value = local_file.kubeconfig.filename
+output "kubeconfig" {
+  value = local.kubeconfig
 }
 
 
