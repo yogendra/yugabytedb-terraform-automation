@@ -1,0 +1,11 @@
+.terraform
+.terraform.lock.hcl
+*.tfstate*
+*.tfvars
+*.tfplan
+.kubeconfig
+*secret*
+yogabayte-k8s-secret.yml
+.gcptoken
+secrets/
+yugabyte-platform-universe-management.conf
